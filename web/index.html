@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desk-Cam</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        h1 { font-size: 20px; margin-bottom: 16px; color: #e94560; }
+        .section {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .section h2 { font-size: 16px; margin-bottom: 12px; color: #0f3460; background: #e94560; display: inline-block; padding: 2px 10px; border-radius: 4px; color: #fff; }
+        label { display: block; font-size: 13px; margin-bottom: 4px; color: #aaa; }
+        input[type="number"] {
+            width: 100%; padding: 8px; border: 1px solid #333;
+            border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px;
+        }
+        .roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .roi-grid .full-width { grid-column: 1 / -1; }
+        button {
+            padding: 10px 16px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 14px; font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.7; }
+        .btn-primary { background: #e94560; color: #fff; }
+        .btn-secondary { background: #0f3460; color: #fff; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-toggle { background: #2ecc71; color: #fff; min-width: 80px; }
+        .btn-toggle.off { background: #7f8c8d; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .preset-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px; background: #0f3460; border-radius: 4px; margin-bottom: 6px;
+        }
+        .preset-item .name { flex: 1; font-weight: 600; }
+        .preset-item button { padding: 6px 12px; font-size: 12px; }
+        #preview-container {
+            position: relative; width: 100%; background: #000;
+            border-radius: 4px; overflow: hidden;
+        }
+        #preview-img {
+            width: 100%; display: block;
+            image-rendering: auto;
+        }
+        #roi-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            cursor: crosshair; touch-action: none;
+        }
+        .roi-rect {
+            position: absolute; border: 2px solid #e94560;
+            background: rgba(233, 69, 96, 0.15);
+            cursor: move; touch-action: none;
+        }
+        .roi-handle {
+            position: absolute; width: 16px; height: 16px;
+            background: #e94560; border-radius: 50%;
+            transform: translate(-50%, -50%);
+            touch-action: none;
+        }
+        .roi-handle.se { bottom: -8px; right: -8px; transform: none; cursor: se-resize; }
+        .roi-handle.nw { top: -8px; left: -8px; transform: none; cursor: nw-resize; }
+        #status-bar {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: #888; margin-top: 8px;
+        }
+        .new-preset-row { display: flex; gap: 8px; margin-top: 8px; }
+        .new-preset-row input {
+            flex: 1; padding: 8px; border: 1px solid #333;
+            border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Desk-Cam</h1>
+
+    <!-- Preview -->
+    <div class="section">
+        <h2>Preview</h2>
+        <div id="preview-container">
+            <img id="preview-img" src="/api/snapshot" alt="preview">
+            <svg id="roi-overlay" viewBox="0 0 4056 3040" preserveAspectRatio="none">
+                <rect id="roi-rect" fill="rgba(233,69,96,0.2)" stroke="#e94560" stroke-width="8" />
+            </svg>
+        </div>
+        <div id="status-bar">
+            <span id="fps-display">--</span>
+        </div>
+    </div>
+
+    <!-- ROI Controls -->
+    <div class="section">
+        <h2>ROI</h2>
+        <div class="roi-grid">
+            <div><label>X</label><input type="number" id="roi-x" min="0" max="4056" step="1"></div>
+            <div><label>Y</label><input type="number" id="roi-y" min="0" max="3040" step="1"></div>
+            <div><label>W</label><input type="number" id="roi-w" min="100" max="4056" step="1"></div>
+            <div><label>H</label><input type="number" id="roi-h" min="100" max="3040" step="1"></div>
+            <div class="full-width btn-row">
+                <button class="btn-primary" onclick="applyROI()">Apply</button>
+                <button class="btn-secondary" onclick="resetROI()">Reset (Full)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rotation -->
+    <div class="section">
+        <h2>Rotation</h2>
+        <button id="rotation-btn" class="btn-toggle" onclick="toggleRotation()">180°: ON</button>
+    </div>
+
+    <!-- Presets -->
+    <div class="section">
+        <h2>Presets</h2>
+        <div id="preset-list"></div>
+        <div class="new-preset-row">
+            <input type="text" id="new-preset-name" placeholder="New preset name">
+            <button class="btn-primary" onclick="savePreset()">Save</button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let state = { roi: {x:0,y:0,w:4056,h:3040}, rotation: true, presets: {}, sensor: {w:4056,h:3040} };
+        let previewTimer = null;
+        let dragging = null; // {type: 'move'|'resize-se'|'resize-nw', startX, startY, startROI}
+
+        // --- API helpers ---
+        async function api(method, path, body) {
+            const opts = { method, headers: {} };
+            if (body !== undefined) {
+                opts.headers["Content-Type"] = "application/json";
+                opts.body = JSON.stringify(body);
+            }
+            const res = await fetch(path, opts);
+            return res.json();
+        }
+
+        // --- Fetch status ---
+        async function fetchStatus() {
+            try {
+                const s = await api("GET", "/api/status");
+                state = s;
+                updateUI();
+            } catch (e) { console.error("fetchStatus:", e); }
+        }
+
+        // --- Update UI from state ---
+        function updateUI() {
+            document.getElementById("roi-x").value = state.roi.x;
+            document.getElementById("roi-y").value = state.roi.y;
+            document.getElementById("roi-w").value = state.roi.w;
+            document.getElementById("roi-h").value = state.roi.h;
+
+            const rotBtn = document.getElementById("rotation-btn");
+            rotBtn.textContent = "180°: " + (state.rotation ? "ON" : "OFF");
+            rotBtn.classList.toggle("off", !state.rotation);
+
+            updateROIOverlay();
+            renderPresets();
+        }
+
+        function updateROIOverlay() {
+            const rect = document.getElementById("roi-rect");
+            rect.setAttribute("x", state.roi.x);
+            rect.setAttribute("y", state.roi.y);
+            rect.setAttribute("width", state.roi.w);
+            rect.setAttribute("height", state.roi.h);
+        }
+
+        // --- Actions ---
+        async function applyROI() {
+            const roi = {
+                x: parseInt(document.getElementById("roi-x").value) || 0,
+                y: parseInt(document.getElementById("roi-y").value) || 0,
+                w: parseInt(document.getElementById("roi-w").value) || 4056,
+                h: parseInt(document.getElementById("roi-h").value) || 3040,
+            };
+            await api("POST", "/api/roi", roi);
+            state.roi = roi;
+            updateROIOverlay();
+        }
+
+        async function resetROI() {
+            const roi = { x: 0, y: 0, w: state.sensor.w, h: state.sensor.h };
+            await api("POST", "/api/roi", roi);
+            state.roi = roi;
+            updateUI();
+        }
+
+        async function toggleRotation() {
+            const enabled = !state.rotation;
+            await api("POST", "/api/rotation", { enabled });
+            state.rotation = enabled;
+            updateUI();
+        }
+
+        function renderPresets() {
+            const list = document.getElementById("preset-list");
+            list.innerHTML = "";
+            for (const [name, preset] of Object.entries(state.presets || {})) {
+                const item = document.createElement("div");
+                item.className = "preset-item";
+                const dims = `${preset.x},${preset.y} ${preset.w}x${preset.h}`;
+                item.innerHTML = `
+                    <span class="name">${esc(name)}</span>
+                    <span style="font-size:12px;color:#888">${dims}</span>
+                    <button class="btn-secondary" onclick="loadPreset('${esc(name)}')">Load</button>
+                    <button class="btn-danger" onclick="deletePreset('${esc(name)}')">Del</button>
+                `;
+                list.appendChild(item);
+            }
+        }
+
+        async function loadPreset(name) {
+            await api("POST", `/api/presets/${encodeURIComponent(name)}/load`);
+            await fetchStatus();
+        }
+
+        async function savePreset() {
+            const input = document.getElementById("new-preset-name");
+            const name = input.value.trim();
+            if (!name) return;
+            await api("POST", "/api/presets", { name });
+            input.value = "";
+            await fetchStatus();
+        }
+
+        async function deletePreset(name) {
+            await api("DELETE", `/api/presets/${encodeURIComponent(name)}`);
+            await fetchStatus();
+        }
+
+        function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+        // --- Preview refresh ---
+        function startPreview() {
+            const img = document.getElementById("preview-img");
+            function refresh() {
+                const newImg = new Image();
+                newImg.onload = () => {
+                    img.src = newImg.src;
+                    previewTimer = setTimeout(refresh, 1000);
+                };
+                newImg.onerror = () => {
+                    previewTimer = setTimeout(refresh, 3000);
+                };
+                newImg.src = "/api/snapshot?t=" + Date.now();
+            }
+            refresh();
+        }
+
+        // --- ROI drag on SVG overlay ---
+        (function() {
+            const overlay = document.getElementById("roi-overlay");
+            const rect = document.getElementById("roi-rect");
+
+            function svgPoint(e) {
+                const pt = overlay.createSVGPoint();
+                const touch = e.touches ? e.touches[0] : e;
+                const ctm = overlay.getScreenCTM().inverse();
+                pt.x = touch.clientX; pt.y = touch.clientY;
+                const svgP = pt.matrixTransform(ctm);
+                return { x: svgP.x, y: svgP.y };
+            }
+
+            function clampROI(roi) {
+                roi.x = Math.max(0, Math.min(roi.x, state.sensor.w - 100));
+                roi.y = Math.max(0, Math.min(roi.y, state.sensor.h - 100));
+                roi.w = Math.max(100, Math.min(roi.w, state.sensor.w - roi.x));
+                roi.h = Math.max(100, Math.min(roi.h, state.sensor.h - roi.y));
+                return roi;
+            }
+
+            function onStart(e) {
+                e.preventDefault();
+                const p = svgPoint(e);
+                const r = state.roi;
+                // Check if near SE corner (resize)
+                const margin = Math.max(r.w, r.h) * 0.12;
+                if (Math.abs(p.x - (r.x + r.w)) < margin && Math.abs(p.y - (r.y + r.h)) < margin) {
+                    dragging = { type: "resize-se", startX: p.x, startY: p.y, startROI: {...r} };
+                } else if (Math.abs(p.x - r.x) < margin && Math.abs(p.y - r.y) < margin) {
+                    dragging = { type: "resize-nw", startX: p.x, startY: p.y, startROI: {...r} };
+                } else if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+                    dragging = { type: "move", startX: p.x, startY: p.y, startROI: {...r} };
+                }
+            }
+
+            function onMove(e) {
+                if (!dragging) return;
+                e.preventDefault();
+                const p = svgPoint(e);
+                const dx = p.x - dragging.startX;
+                const dy = p.y - dragging.startY;
+                const s = dragging.startROI;
+                let newROI;
+                if (dragging.type === "move") {
+                    newROI = { x: s.x + dx, y: s.y + dy, w: s.w, h: s.h };
+                } else if (dragging.type === "resize-se") {
+                    newROI = { x: s.x, y: s.y, w: s.w + dx, h: s.h + dy };
+                } else if (dragging.type === "resize-nw") {
+                    newROI = { x: s.x + dx, y: s.y + dy, w: s.w - dx, h: s.h - dy };
+                }
+                newROI = clampROI(newROI);
+                state.roi = newROI;
+                updateROIOverlay();
+                document.getElementById("roi-x").value = Math.round(newROI.x);
+                document.getElementById("roi-y").value = Math.round(newROI.y);
+                document.getElementById("roi-w").value = Math.round(newROI.w);
+                document.getElementById("roi-h").value = Math.round(newROI.h);
+            }
+
+            function onEnd(e) {
+                if (!dragging) return;
+                dragging = null;
+                // Round and apply
+                state.roi.x = Math.round(state.roi.x);
+                state.roi.y = Math.round(state.roi.y);
+                state.roi.w = Math.round(state.roi.w);
+                state.roi.h = Math.round(state.roi.h);
+                applyROI();
+            }
+
+            overlay.addEventListener("mousedown", onStart);
+            overlay.addEventListener("touchstart", onStart);
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("touchmove", onMove, { passive: false });
+            window.addEventListener("mouseup", onEnd);
+            window.addEventListener("touchend", onEnd);
+        })();
+
+        // --- Init ---
+        fetchStatus().then(() => startPreview());
+    </script>
+</body>
+</html>
