@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 from logger import get_logger
@@ -28,6 +29,8 @@ _DEFAULTS = {
 }
 
 _data: dict = {}
+_persist_timer = None
+_PERSIST_DELAY = 5  # seconds
 
 
 def load() -> dict:
@@ -76,6 +79,16 @@ def persist():
         log.warning("config persist failed: %s", e)
 
 
+def _schedule_persist():
+    """Schedule persist after a delay. Resets timer on repeated calls."""
+    global _persist_timer
+    if _persist_timer:
+        _persist_timer.cancel()
+    _persist_timer = threading.Timer(_PERSIST_DELAY, persist)
+    _persist_timer.daemon = True
+    _persist_timer.start()
+
+
 def get(key: str, default=None):
     return _data.get(key, default)
 
@@ -83,3 +96,4 @@ def get(key: str, default=None):
 def set(key: str, value):
     _data[key] = value
     save()
+    _schedule_persist()

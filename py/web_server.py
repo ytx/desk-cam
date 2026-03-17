@@ -3,7 +3,9 @@
 import json
 import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from pathlib import Path
+from urllib.parse import urlparse
 
 from logger import get_logger
 
@@ -28,32 +30,37 @@ class Handler(SimpleHTTPRequestHandler):
         pass  # suppress default access logs
 
     def do_GET(self):
-        if self.path == "/api/status":
+        path = urlparse(self.path).path
+        if path == "/api/status":
             self._json_response(self._get_status())
-        elif self.path == "/api/presets":
+        elif path == "/api/presets":
             self._json_response(self._get_presets())
-        elif self.path == "/api/snapshot":
+        elif path == "/api/snapshot":
             self._snapshot_response()
         else:
             super().do_GET()
 
     def do_POST(self):
+        path = urlparse(self.path).path
         body = self._read_body()
-        if self.path == "/api/roi":
+        if path == "/api/roi":
             self._handle_roi(body)
-        elif self.path == "/api/rotation":
+        elif path == "/api/rotation":
             self._handle_rotation(body)
-        elif self.path == "/api/presets":
+        elif path == "/api/snapshot/refresh":
+            self._handle_refresh_snapshot()
+        elif path == "/api/presets":
             self._handle_save_preset(body)
-        elif self.path.startswith("/api/presets/") and self.path.endswith("/load"):
-            name = self.path.split("/")[3]
+        elif path.startswith("/api/presets/") and path.endswith("/load"):
+            name = path.split("/")[3]
             self._handle_load_preset(name)
         else:
             self._error_response(404, "not found")
 
     def do_DELETE(self):
-        if self.path.startswith("/api/presets/"):
-            name = self.path.split("/")[3]
+        path = urlparse(self.path).path
+        if path.startswith("/api/presets/"):
+            name = path.split("/")[3]
             self._handle_delete_preset(name)
         else:
             self._error_response(404, "not found")
@@ -81,6 +88,13 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(jpeg)
+
+    def _handle_refresh_snapshot(self):
+        if not _app:
+            self._error_response(503, "not ready")
+            return
+        _app.refresh_snapshot()
+        self._snapshot_response()
 
     def _handle_roi(self, body):
         if not _app:
@@ -151,9 +165,13 @@ class Handler(SimpleHTTPRequestHandler):
         self._json_response({"error": message}, status)
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 def start(port: int):
     """Start the HTTP server in a background thread."""
-    server = HTTPServer(("0.0.0.0", port), Handler)
+    server = ThreadedHTTPServer(("0.0.0.0", port), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     log.info("listening on port %d", port)
