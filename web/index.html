@@ -14,6 +14,18 @@
             padding: 16px;
         }
         h1 { font-size: 20px; margin-bottom: 16px; color: #e94560; }
+
+        /* Two-column layout */
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 16px;
+            align-items: start;
+        }
+        @media (max-width: 800px) {
+            .columns { grid-template-columns: 1fr; }
+        }
+
         .section {
             background: #16213e;
             border-radius: 8px;
@@ -21,20 +33,20 @@
             margin-bottom: 16px;
         }
         .section h2 {
-            font-size: 16px; margin-bottom: 12px;
+            font-size: 14px; margin-bottom: 10px;
             background: #e94560; display: inline-block;
             padding: 2px 10px; border-radius: 4px; color: #fff;
         }
         label { display: block; font-size: 13px; margin-bottom: 4px; color: #aaa; }
         input[type="number"] {
-            width: 100%; padding: 8px; border: 1px solid #333;
-            border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px;
+            width: 100%; padding: 6px; border: 1px solid #333;
+            border-radius: 4px; background: #0f3460; color: #eee; font-size: 13px;
         }
-        .roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .roi-grid .full-width { grid-column: 1 / -1; }
         button {
-            padding: 10px 16px; border: none; border-radius: 6px;
-            cursor: pointer; font-size: 14px; font-weight: 600;
+            padding: 8px 14px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 13px; font-weight: 600;
             transition: opacity 0.2s;
         }
         button:active { opacity: 0.7; }
@@ -45,18 +57,21 @@
         .btn-refresh { background: #2980b9; color: #fff; }
         .btn-toggle { background: #2ecc71; color: #fff; min-width: 80px; }
         .btn-toggle.off { background: #7f8c8d; }
-        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
         .preset-item {
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px; background: #0f3460; border-radius: 4px; margin-bottom: 6px;
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 8px; background: #0f3460; border-radius: 4px; margin-bottom: 4px;
         }
-        .preset-item .name { flex: 1; font-weight: 600; }
-        .preset-item button { padding: 6px 12px; font-size: 12px; }
-        .new-preset-row { display: flex; gap: 8px; margin-top: 8px; }
+        .preset-item .name { flex: 1; font-weight: 600; font-size: 13px; }
+        .preset-item .dims { font-size: 11px; color: #888; }
+        .preset-item button { padding: 4px 10px; font-size: 11px; }
+        .new-preset-row { display: flex; gap: 6px; margin-top: 8px; }
         .new-preset-row input {
-            flex: 1; padding: 8px; border: 1px solid #333;
-            border-radius: 4px; background: #0f3460; color: #eee; font-size: 14px;
+            flex: 1; padding: 6px; border: 1px solid #333;
+            border-radius: 4px; background: #0f3460; color: #eee; font-size: 13px;
         }
+
+        /* Preview */
         #preview-wrapper {
             position: relative;
             width: 100%;
@@ -76,55 +91,62 @@
         #preview-bar {
             display: flex; align-items: center; gap: 8px; margin-top: 6px;
         }
-        #preview-status { font-size: 12px; color: #888; flex: 1; }
-        .roi-info { font-size: 12px; color: #888; margin-top: 4px; }
+        #preview-status { font-size: 11px; color: #888; flex: 1; }
+        .roi-info { font-size: 11px; color: #888; margin-top: 4px; }
     </style>
 </head>
 <body>
     <h1>Desk-Cam</h1>
 
-    <!-- Preview: full sensor snapshot (cached) with ROI overlay -->
-    <div class="section">
-        <h2>Preview</h2>
-        <div id="preview-wrapper">
-            <img id="preview-img" alt="preview">
-            <canvas id="roi-canvas"></canvas>
-        </div>
-        <div id="preview-bar">
-            <span id="preview-status">Loading...</span>
-            <button class="btn-refresh" id="refresh-btn" onclick="refreshSnapshot()">Refresh</button>
-        </div>
-    </div>
-
-    <!-- ROI Controls -->
-    <div class="section">
-        <h2>ROI</h2>
-        <div class="roi-grid">
-            <div><label>X</label><input type="number" id="roi-x" min="0" step="1"></div>
-            <div><label>Y</label><input type="number" id="roi-y" min="0" step="1"></div>
-            <div><label>W</label><input type="number" id="roi-w" min="100" step="1"></div>
-            <div><label>H</label><input type="number" id="roi-h" min="100" step="1"></div>
-            <div class="full-width btn-row">
-                <button class="btn-primary" onclick="applyROI()">Apply</button>
-                <button class="btn-secondary" onclick="resetROI()">Reset (Full)</button>
+    <div class="columns">
+        <!-- Left: Preview -->
+        <div>
+            <div class="section">
+                <h2>Preview</h2>
+                <div id="preview-wrapper">
+                    <img id="preview-img" alt="preview">
+                    <canvas id="roi-canvas"></canvas>
+                </div>
+                <div id="preview-bar">
+                    <span id="preview-status">Loading...</span>
+                    <button class="btn-refresh" id="refresh-btn" onclick="refreshSnapshot()">Refresh</button>
+                </div>
             </div>
         </div>
-        <div class="roi-info" id="roi-info"></div>
-    </div>
 
-    <!-- Rotation -->
-    <div class="section">
-        <h2>Rotation</h2>
-        <button id="rotation-btn" class="btn-toggle" onclick="toggleRotation()">180: ON</button>
-    </div>
+        <!-- Right: Controls -->
+        <div>
+            <!-- ROI -->
+            <div class="section">
+                <h2>ROI</h2>
+                <div class="roi-grid">
+                    <div><label>X</label><input type="number" id="roi-x" min="0" step="1"></div>
+                    <div><label>Y</label><input type="number" id="roi-y" min="0" step="1"></div>
+                    <div><label>W</label><input type="number" id="roi-w" min="100" step="1"></div>
+                    <div><label>H</label><input type="number" id="roi-h" min="100" step="1"></div>
+                    <div class="full-width btn-row">
+                        <button class="btn-primary" onclick="applyROI()">Apply</button>
+                        <button class="btn-secondary" onclick="resetROI()">Reset</button>
+                    </div>
+                </div>
+                <div class="roi-info" id="roi-info"></div>
+            </div>
 
-    <!-- Presets -->
-    <div class="section">
-        <h2>Presets</h2>
-        <div id="preset-list"></div>
-        <div class="new-preset-row">
-            <input type="text" id="new-preset-name" placeholder="New preset name">
-            <button class="btn-primary" onclick="savePreset()">Save</button>
+            <!-- Presets -->
+            <div class="section">
+                <h2>Presets</h2>
+                <div id="preset-list"></div>
+                <div class="new-preset-row">
+                    <input type="text" id="new-preset-name" placeholder="Name">
+                    <button class="btn-primary" onclick="savePreset()">Save</button>
+                </div>
+            </div>
+
+            <!-- Rotation -->
+            <div class="section">
+                <h2>Rotation</h2>
+                <button id="rotation-btn" class="btn-toggle" onclick="toggleRotation()">180: ON</button>
+            </div>
         </div>
     </div>
 
@@ -151,8 +173,6 @@
         }
 
         // --- Coordinate mapping (sensor <-> screen) ---
-        // The preview image shows the snapshot_crop area (actual ISP crop of full sensor).
-        // Map coordinates relative to snapshot_crop.
         function screenToSensor(clientX, clientY) {
             const rect = wrapper.getBoundingClientRect();
             const sc = state.snapshot_crop;
@@ -292,10 +312,10 @@
             document.getElementById("roi-h").value=Math.round(state.roi.h);
             const cl = state.crop_limits;
             document.getElementById("roi-info").textContent=
-                `Crop area: (${cl.x},${cl.y}) ${cl.w}x${cl.h} / ROI: ${state.roi.w}x${state.roi.h} at (${state.roi.x}, ${state.roi.y})`;
+                `Crop: (${cl.x},${cl.y}) ${cl.w}x${cl.h}`;
         }
 
-        // --- Load cached snapshot (no ScalerCrop change) ---
+        // --- Snapshot ---
         function loadSnapshot() {
             const tmp = new Image();
             tmp.onload = function() {
@@ -309,10 +329,9 @@
             tmp.src = "/api/snapshot?t=" + Date.now();
         }
 
-        // --- Refresh: take new full-sensor snapshot (brief HDMI flicker) ---
         window.refreshSnapshot = async function() {
             refreshBtn.disabled = true;
-            statusEl.textContent = "Capturing full sensor...";
+            statusEl.textContent = "Capturing...";
             try {
                 const res = await fetch("/api/snapshot/refresh", { method: "POST" });
                 if (res.ok) {
@@ -339,21 +358,19 @@
                 h: parseInt(document.getElementById("roi-h").value)||3040,
             };
             await api("POST", "/api/roi", roi);
-            // Re-fetch to get ISP-adjusted actual ROI
             await fetchStatus();
         };
         window.resetROI = async function() {
-            const roi = {x:0,y:0,w:state.sensor.w,h:state.sensor.h};
+            const cl = state.crop_limits;
+            const roi = {x:cl.x, y:cl.y, w:cl.w, h:cl.h};
             await api("POST", "/api/roi", roi);
-            state.roi = roi;
-            updateUI();
+            await fetchStatus();
         };
         window.toggleRotation = async function() {
             const enabled = !state.rotation;
             await api("POST", "/api/rotation", {enabled});
             state.rotation = enabled;
             updateUI();
-            // Rotation changes also refresh snapshot
             refreshSnapshot();
         };
         window.savePreset = async function() {
@@ -387,13 +404,21 @@
             for (const [name,preset] of Object.entries(state.presets||{})) {
                 const item=document.createElement("div");
                 item.className="preset-item";
-                const dims=`${preset.x},${preset.y} ${preset.w}x${preset.h}`;
-                const en=name.replace(/'/g,"\\'").replace(/"/g,"&quot;");
-                item.innerHTML=
-                    `<span class="name">${esc(name)}</span>`+
-                    `<span style="font-size:12px;color:#888">${dims}</span>`+
-                    `<button class="btn-secondary" onclick="loadPreset('${en}')">Load</button>`+
-                    `<button class="btn-danger" onclick="deletePreset('${en}')">Del</button>`;
+                const nameSpan=document.createElement("span");
+                nameSpan.className="name";
+                nameSpan.textContent=name;
+                const dimsSpan=document.createElement("span");
+                dimsSpan.className="dims";
+                dimsSpan.textContent=`${preset.x},${preset.y} ${preset.w}x${preset.h}`;
+                const loadBtn=document.createElement("button");
+                loadBtn.className="btn-secondary";
+                loadBtn.textContent="Load";
+                loadBtn.addEventListener("click",()=>loadPreset(name));
+                const delBtn=document.createElement("button");
+                delBtn.className="btn-danger";
+                delBtn.textContent="Del";
+                delBtn.addEventListener("click",()=>deletePreset(name));
+                item.append(nameSpan,dimsSpan,loadBtn,delBtn);
                 list.appendChild(item);
             }
         }
@@ -404,7 +429,6 @@
             catch(e) { console.error("fetchStatus:",e); }
         }
 
-        // Init: load status, then load cached snapshot
         fetchStatus().then(() => loadSnapshot());
     })();
     </script>
